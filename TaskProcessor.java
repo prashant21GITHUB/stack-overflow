@@ -7,6 +7,7 @@ import java.util.function.BiFunction;
 
 public class TaskProcessor implements ITaskProcessor {
 
+    //This map will contain all the tasks which are in queue and not yet completed
     private final Map<String, Task> taskInProgresssByUniqueIdentifierMap = new ConcurrentHashMap<>();
 
     private final BlockingQueue<Task> taskQueue = new ArrayBlockingQueue<Task>(100);
@@ -14,6 +15,7 @@ public class TaskProcessor implements ITaskProcessor {
 
     private Executor executor;
     private AtomicBoolean isStarted;
+    private final DBManager dbManager = new DBManager();
 
     @Override
     public void start() {
@@ -37,6 +39,7 @@ public class TaskProcessor implements ITaskProcessor {
                 @Override
                 public void onTaskCompletion(TaskResult taskResult) {
                     task.setCompleted(true);
+                    //TODO: we can also propagate the taskResult to waiting users, Implement it if it is required.
                     notifyAllWaitingUsers(task);
                 }
 
@@ -68,6 +71,7 @@ public class TaskProcessor implements ITaskProcessor {
             public Task apply(String s, Task task) {
                 synchronized (task) {
                     try {
+                        //
                         task.wait();
                     } catch (InterruptedException e) {
                         e.printStackTrace();
@@ -76,15 +80,16 @@ public class TaskProcessor implements ITaskProcessor {
                 return task;
             }
         });
-        if(!task.isCompleted()) {
+        //If task is null, it means the task was not there in queue, so we direcltly query the db for the task result
+        if(task != null && !task.isCompleted()) {
             return null;  // Handle this condition gracefully, If task is not completed, it means there was some exception
         }
-        TaskResult taskResult = getResultFromDB(uniqueIdentifier);
+        TaskResult taskResult = getResultFromDB(uniqueIdentifier); // At this point the result must be already saved in DB if the corresponding task has been processed ever.
         return taskResult;
     }
 
     private TaskResult getResultFromDB(String uniqueIdentifier) {
-        return null;
+        return dbManager.getTaskResult();
     }
 
 
